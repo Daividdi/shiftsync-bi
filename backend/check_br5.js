@@ -1,0 +1,12 @@
+const Database = require('better-sqlite3');
+const db = new Database('/opt/shiftsync-bi/backend/data/shiftsync.db');
+const EXCLUDE = ['Group Leader','Design Doctor','Direct Manager','HR','IT','Lean Operations','SoftwareDeveloper-开发人员','Trainer','User-Wuxi','Tech-Wuxi','Client Support','Clinical Support'];
+const latestRow = db.prepare("SELECT MAX(snapshot_date) as d FROM uploads WHERE file_type='productivity'").get();
+const month = latestRow?.d?.slice(0,7);
+const dates = db.prepare("SELECT DISTINCT snapshot_date FROM uploads WHERE file_type='productivity' AND snapshot_date LIKE ?").all(month+'-').map(r=>r.snapshot_date);
+const ph = dates.map(()=>'?').join(',');
+const excPh = EXCLUDE.map(()=>'?').join(',');
+const rows = db.prepare('SELECT group_no, designer_name, SUM(completed) as tc FROM productivity WHERE snapshot_date IN ('+ph+') AND on_duty_morning=1 AND quota>0 AND job_level NOT IN ('+excPh+') GROUP BY group_no, designer_name ORDER BY group_no, tc DESC').all(...dates,...EXCLUDE);
+const br5 = rows.filter(r=>r.group_no==='BR-ATD-BR5');
+console.log('Month:', month, '| Dates:', dates.length);
+console.log('BR5 designers:', br5.length, br5.map(r=>r.designer_name+' ('+r.tc.toFixed(1)+')').join(', '));

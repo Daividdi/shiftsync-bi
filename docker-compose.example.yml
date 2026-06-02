@@ -1,0 +1,29 @@
+services:
+  bi-api:
+    build: ./backend
+    restart: unless-stopped
+    volumes:
+      - bi-data:/data
+    environment:
+      - PORT=4000
+      - DATA_DIR=/data
+      - BI_NOTIFY_SECRET=your_secret_here
+      - SHIFTSYNC_NOTIFY_URL=http://your-server-ip:8080
+    networks:
+      - bi-net
+
+  bi-ui:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    depends_on:
+      - bi-api
+    networks:
+      - bi-net
+
+volumes:
+  bi-data:
+
+networks:
+  bi-net:

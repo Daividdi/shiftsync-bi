@@ -9,12 +9,29 @@ function isProductionGroup(g) {
   return typeof g === "string" && g.startsWith("BR-ATD-");
 }
 
+// Latest period with REPRESENTATIVE data. A freshly-uploaded in-progress week
+// has its end-date in the future and only a handful of designers scored so far;
+// it must not become the dashboard default, or the panels look empty right after
+// an upload. We skip leading periods whose designer count is a small fraction of
+// the recent norm — this drops a just-started week but keeps an in-progress month
+// (which already holds a couple of weeks of data and is normally what users want).
 function latestDesignerDate(periodType) {
-  const row = db.prepare(
-    `SELECT snapshot_date FROM uploads WHERE file_type='quality_${periodType}_designer'
-     ORDER BY snapshot_date DESC LIMIT 1`
-  ).get();
-  return row?.snapshot_date || null;
+  const periods = db.prepare(
+    `SELECT u.snapshot_date AS d, COUNT(q.id) AS cnt
+       FROM uploads u
+       LEFT JOIN quality_designer q ON q.upload_id = u.id
+      WHERE u.file_type = ?
+      GROUP BY u.snapshot_date
+      ORDER BY u.snapshot_date DESC
+      LIMIT 6`
+  ).all(`quality_${periodType}_designer`);
+  if (!periods.length) return null;
+  const maxCnt = Math.max(...periods.map(p => p.cnt));
+  // Walk newest→oldest; return the first period that is at least 40% of the norm.
+  for (const p of periods) {
+    if (p.cnt >= 0.4 * maxCnt) return p.d;
+  }
+  return periods[0].d; // every recent period is sparse — just show the newest
 }
 
 function resolveDate(periodType, explicit) {
@@ -80,10 +97,11 @@ router.get("/summary", (req, res) => {
 // GET /api/quality/trend?periods=7&date=YYYY-MM-DD
 router.get("/trend", (req, res) => {
   const n    = Math.min(20, parseInt(req.query.periods) || 7);
-  const upTo = req.query.date || null;
-  const uploads = upTo
-    ? db.prepare("SELECT DISTINCT snapshot_date FROM uploads WHERE file_type='quality_week_designer' AND snapshot_date<=? ORDER BY snapshot_date DESC LIMIT ?").all(upTo, n)
-    : db.prepare("SELECT DISTINCT snapshot_date FROM uploads WHERE file_type='quality_week_designer' ORDER BY snapshot_date DESC LIMIT ?").all(n);
+  // Cap at the latest representative week so an in-progress week doesn't appear as a near-zero cliff.
+  const ceiling = req.query.date || latestDesignerDate("week");
+  const uploads = ceiling ? db.prepare(
+    "SELECT DISTINCT snapshot_date FROM uploads WHERE file_type='quality_week_designer' AND snapshot_date<=? ORDER BY snapshot_date DESC LIMIT ?"
+  ).all(ceiling, n) : [];
 
   const trend = uploads.map(r => r.snapshot_date).reverse().map(date => {
     const rows  = db.prepare("SELECT * FROM quality_designer WHERE snapshot_date=? AND period_type='week'").all(date).filter(r => isProductionGroup(r.group_no));
@@ -99,10 +117,11 @@ router.get("/trend", (req, res) => {
 // GET /api/quality/trend/month?periods=6&date=YYYY-MM-DD
 router.get("/trend/month", (req, res) => {
   const n    = Math.min(12, parseInt(req.query.periods) || 6);
-  const upTo = req.query.date || null;
-  const uploads = upTo
-    ? db.prepare("SELECT DISTINCT snapshot_date FROM uploads WHERE file_type='quality_month_designer' AND snapshot_date<=? ORDER BY snapshot_date DESC LIMIT ?").all(upTo, n)
-    : db.prepare("SELECT DISTINCT snapshot_date FROM uploads WHERE file_type='quality_month_designer' ORDER BY snapshot_date DESC LIMIT ?").all(n);
+  // Cap at the latest representative month (keeps an in-progress month, which holds real data).
+  const ceiling = req.query.date || latestDesignerDate("month");
+  const uploads = ceiling ? db.prepare(
+    "SELECT DISTINCT snapshot_date FROM uploads WHERE file_type='quality_month_designer' AND snapshot_date<=? ORDER BY snapshot_date DESC LIMIT ?"
+  ).all(ceiling, n) : [];
 
   const trend = uploads.map(r => r.snapshot_date).reverse().map(date => {
     const rows  = db.prepare("SELECT * FROM quality_designer WHERE snapshot_date=? AND period_type='month'").all(date).filter(r => isProductionGroup(r.group_no));

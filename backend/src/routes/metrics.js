@@ -107,18 +107,30 @@ router.get("/productivity/top", (req, res) => {
   if (!date) return res.json([]);
 
   const gl = req.query.groupType === "atd" ? "BR-ATD-%" : req.query.groupType === "atp" ? "BR-ATP%" : null;
-  let q = `SELECT designer_name, group_no, job_level, progress, completed, quota
+  let q = `SELECT designer_name, group_no, job_level, completed, quota
      FROM productivity
-     WHERE snapshot_date=? AND on_duty_morning=1 AND progress IS NOT NULL
-       AND quota > 0
+     WHERE snapshot_date=? AND on_duty_morning=1
        AND job_level NOT IN (${EXCLUDE_LEVELS.map(() => "?").join(",")})`;
   const params = [date, ...EXCLUDE_LEVELS];
   if (gl) { q += " AND group_no LIKE ?"; params.push(gl); }
-  q += " ORDER BY progress DESC, completed DESC LIMIT ?";
-  params.push(n);
+  const raw = db.prepare(q).all(...params);
 
-  const rows = db.prepare(q).all(...params);
-  res.json({ date, rankings: rows });
+  // Apply admin-set quotas (the source of truth) so attainment matches the
+  // rest of the dashboard instead of using the much lower spreadsheet quota.
+  const resolveQuota  = getAdminQuotaResolver(date);
+  const excludedNames = getExcludedDesigners();
+  const rankings = raw
+    .filter(r => !excludedNames.has(r.designer_name))
+    .map(r => {
+      const aq = resolveQuota(r.designer_name, r.group_no);
+      const quota = aq != null ? aq : r.quota;
+      return quota > 0 ? { ...r, quota, progress: r.completed / quota } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.progress - a.progress || b.completed - a.completed)
+    .slice(0, n);
+
+  res.json({ date, rankings });
 });
 
 // GET /api/metrics/productivity/groups?date=YYYY-MM-DD
@@ -164,21 +176,33 @@ router.get("/productivity/top-by-group", (req, res) => {
   const n = parseInt(req.query.n) || 3;
   if (!date) return res.json([]);
 
-  const groups = db.prepare(
-    "SELECT DISTINCT group_no FROM productivity WHERE snapshot_date=? ORDER BY group_no"
-  ).all(date).map(r => r.group_no).filter(g => isProductionGroup(g));
+  const raw = db.prepare(
+    `SELECT designer_name, group_no, job_level, completed, quota
+     FROM productivity
+     WHERE snapshot_date=? AND on_duty_morning=1
+       AND group_no LIKE 'BR-ATD-%'
+       AND job_level NOT IN (${EXCLUDE_LEVELS.map(() => "?").join(",")})`
+  ).all(date, ...EXCLUDE_LEVELS);
 
-  const result = groups.map(g => {
-    const rows = db.prepare(
-      `SELECT designer_name, group_no, job_level, progress, completed, quota
-       FROM productivity
-       WHERE snapshot_date=? AND group_no=? AND on_duty_morning=1
-         AND progress IS NOT NULL AND quota > 0
-         AND job_level NOT IN (${EXCLUDE_LEVELS.map(() => "?").join(",")})
-       ORDER BY progress DESC, completed DESC LIMIT ?`
-    ).all(date, g, ...EXCLUDE_LEVELS, n);
-    return { group: g, top: rows };
-  }).filter(g => g.top.length > 0);
+  // Apply admin-set quotas (source of truth) before ranking, so attainment % is
+  // consistent with the summary/attainment panels.
+  const resolveQuota  = getAdminQuotaResolver(date);
+  const excludedNames = getExcludedDesigners();
+  const byGroup = {};
+  for (const r of raw) {
+    if (excludedNames.has(r.designer_name)) continue;
+    const aq = resolveQuota(r.designer_name, r.group_no);
+    const quota = aq != null ? aq : r.quota;
+    if (!(quota > 0)) continue;
+    (byGroup[r.group_no] ||= []).push({
+      designer_name: r.designer_name, group_no: r.group_no, job_level: r.job_level,
+      completed: r.completed, quota, progress: r.completed / quota,
+    });
+  }
+  const result = Object.keys(byGroup).sort().map(g => ({
+    group: g,
+    top: byGroup[g].sort((a, b) => b.progress - a.progress || b.completed - a.completed).slice(0, n),
+  })).filter(g => g.top.length > 0);
 
   res.json({ date, groups: result });
 });
@@ -199,35 +223,45 @@ router.get("/productivity/top-by-group/month", (req, res) => {
 
   if (!dates.length) return res.json({ month, groups: [] });
 
-  const ph = dates.map(() => "?").join(",");
-  const rows = db.prepare(`
-    SELECT group_no, designer_name, job_level,
-           SUM(completed) as total_completed,
-           SUM(quota) as total_quota
-    FROM productivity
-    WHERE snapshot_date IN (${ph})
-      AND on_duty_morning = 1
-      AND quota > 0
-      AND job_level NOT IN (${EXCLUDE_LEVELS.map(() => "?").join(",")})
-    GROUP BY group_no, designer_name
-    ORDER BY group_no, total_completed DESC
-  `).all(...dates, ...EXCLUDE_LEVELS);
-
-  const byGroup = {};
-  for (const row of rows) {
-    if (!byGroup[row.group_no]) byGroup[row.group_no] = [];
-    if (byGroup[row.group_no].length < n) {
-      byGroup[row.group_no].push({
-        designer_name: row.designer_name,
-        job_level: row.job_level,
-        completed: +row.total_completed.toFixed(1),
-        quota: Math.round(row.total_quota),
-        progress: row.total_quota > 0 ? row.total_completed / row.total_quota : null,
-      });
+  // Accumulate per designer across the month, applying the admin quota for each
+  // day (source of truth) rather than summing the low spreadsheet quota.
+  const excludedNames = getExcludedDesigners();
+  const dmap = {};
+  for (const date of dates) {
+    const resolveQuota = getAdminQuotaResolver(date);
+    const rows = db.prepare(`
+      SELECT designer_name, group_no, job_level, completed, quota
+      FROM productivity
+      WHERE snapshot_date=? AND on_duty_morning=1
+        AND group_no LIKE 'BR-ATD-%'
+        AND job_level NOT IN (${EXCLUDE_LEVELS.map(() => "?").join(",")})
+    `).all(date, ...EXCLUDE_LEVELS);
+    for (const r of rows) {
+      if (excludedNames.has(r.designer_name)) continue;
+      const aq = resolveQuota(r.designer_name, r.group_no);
+      const quota = aq != null ? aq : r.quota;
+      if (!(quota > 0)) continue;
+      const k = r.designer_name;
+      if (!dmap[k]) dmap[k] = { designer_name: r.designer_name, group_no: r.group_no, job_level: r.job_level, completed: 0, quota: 0 };
+      dmap[k].completed += r.completed;
+      dmap[k].quota     += quota;
     }
   }
 
-  const groups = Object.keys(byGroup).sort().map(g => ({ group: g, top: byGroup[g] }));
+  const byGroup = {};
+  for (const d of Object.values(dmap)) {
+    (byGroup[d.group_no] ||= []).push({
+      designer_name: d.designer_name,
+      job_level: d.job_level,
+      completed: +d.completed.toFixed(1),
+      quota: Math.round(d.quota),
+      progress: d.quota > 0 ? d.completed / d.quota : null,
+    });
+  }
+  const groups = Object.keys(byGroup).sort().map(g => ({
+    group: g,
+    top: byGroup[g].sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0) || b.completed - a.completed).slice(0, n),
+  }));
   res.json({ month, groups });
 });
 
@@ -256,21 +290,38 @@ router.get("/productivity/levels", (req, res) => {
   const date = req.query.date || (dates.length > 1 ? dates[dates.length - 2] : dates[0]);
   if (!date) return res.json({ date: null, levels: [] });
 
-  const rows = db.prepare(`
-    SELECT job_level,
-           COUNT(*) as designer_count,
-           ROUND(AVG(progress) * 100, 1) as avg_progress_pct,
-           ROUND(AVG(completed), 1) as avg_completed,
-           ROUND(AVG(quota), 1) as avg_quota
+  const raw = db.prepare(`
+    SELECT designer_name, group_no, job_level, completed, quota
     FROM productivity
-    WHERE snapshot_date=? AND on_duty_morning=1 AND quota > 0
+    WHERE snapshot_date=? AND on_duty_morning=1
       AND group_no LIKE 'BR-ATD-%'
       AND job_level NOT IN (${EXCLUDE_LEVELS.map(() => "?").join(",")})
-    GROUP BY job_level
-    ORDER BY avg_progress_pct DESC
   `).all(date, ...EXCLUDE_LEVELS);
 
-  res.json({ date, levels: rows });
+  // Average attainment per level using admin quotas (source of truth).
+  const resolveQuota  = getAdminQuotaResolver(date);
+  const excludedNames = getExcludedDesigners();
+  const byLevel = {};
+  for (const r of raw) {
+    if (excludedNames.has(r.designer_name)) continue;
+    const aq = resolveQuota(r.designer_name, r.group_no);
+    const quota = aq != null ? aq : r.quota;
+    if (!(quota > 0)) continue;
+    const l = byLevel[r.job_level] ||= { job_level: r.job_level, designer_count: 0, sum_progress: 0, sum_completed: 0, sum_quota: 0 };
+    l.designer_count++;
+    l.sum_progress  += r.completed / quota;
+    l.sum_completed += r.completed;
+    l.sum_quota     += quota;
+  }
+  const levels = Object.values(byLevel).map(l => ({
+    job_level: l.job_level,
+    designer_count: l.designer_count,
+    avg_progress_pct: +(l.sum_progress / l.designer_count * 100).toFixed(1),
+    avg_completed: +(l.sum_completed / l.designer_count).toFixed(1),
+    avg_quota: +(l.sum_quota / l.designer_count).toFixed(1),
+  })).sort((a, b) => b.avg_progress_pct - a.avg_progress_pct);
+
+  res.json({ date, levels });
 });
 
 // GET /api/metrics/productivity/attainment?date=YYYY-MM-DD

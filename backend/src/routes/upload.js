@@ -201,7 +201,7 @@ function handleProductivity(req, res) {
   }
 
   notifyBiUpdated(
-    "BI Atualizado",
+    "BI & Indicadores Pessoais atualizados",
     describeProductivityUpdate(dateResults)
   );
   return res.json({ ok: true, dates: dateResults.length, imported, replaced });
@@ -323,7 +323,7 @@ function handleQuality(req, res, snapshotDate) {
     }
 
     notifyBiUpdated(
-      "BI Atualizado",
+      "BI & Indicadores Pessoais atualizados",
       describeQualityUpdate(importedWeeks, importedMonths)
     );
     return res.json({
@@ -367,7 +367,7 @@ function handleQuality(req, res, snapshotDate) {
   }
 
   notifyBiUpdated(
-    "BI Atualizado",
+    "BI & Indicadores Pessoais atualizados",
     periodType === "month" ? "Último mês atualizado" : "Última semana atualizada"
   );
   return res.json({ ok: true, date: snapshotDate, subType: fileTypeFull, periodLabel, rows: rows.length });

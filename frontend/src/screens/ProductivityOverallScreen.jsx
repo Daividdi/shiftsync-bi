@@ -46,7 +46,7 @@ export default function ProductivityOverallScreen() {
   const [availDates, setAvailDates]   = useState([]);
   const [selDate, setSelDate]         = useState(null);
   const [monthSummary, setMonthSummary] = useState(null);
-  const [periodView, setPeriodView] = useState("day"); // "day" | "week" | "month"
+  const [monthMode, setMonthMode] = useState(false); // false => D-1 + Semanal; true => Mês consolidado
 
   useEffect(() => {
     api.get("/metrics/productivity/available-dates").then(({ data }) => {
@@ -180,8 +180,15 @@ export default function ProductivityOverallScreen() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <PeriodSelector dates={availDates} selectedDate={selDate} onDateChange={setSelDate} periodType="day" />
+          <button onClick={() => setMonthMode(m => !m)} style={{
+            background: monthMode ? "rgba(59,130,246,0.18)" : T.bgControl,
+            border: `1px solid ${monthMode ? "#3b82f6aa" : T.borderControl}`,
+            borderRadius: 9, padding: "7px 16px",
+            color: monthMode ? "#3b82f6" : T.t3,
+            fontSize: 13, fontWeight: monthMode ? 800 : 600, cursor: "pointer", whiteSpace: "nowrap",
+          }}>Mês consolidado</button>
           <div style={{ fontSize: 14, fontWeight: 600, color: T.t2, background: T.bgControl, padding: "8px 20px", borderRadius: 20, border: `1px solid ${T.borderControl}`, boxShadow: T.pillShadow }}>
-            {latestDate ? `D-1 · ${fmtDateFull(latestDate)}` : "Sem dados"}
+            {monthMode ? `Mês · ${monthLabel}${monthDays ? ` · ${monthDays} dias` : ""}` : (latestDate ? `D-1 · ${fmtDateFull(latestDate)}` : "Sem dados")}
             {refreshedAt && <span style={{ color: T.t5, fontSize: 12, marginLeft: 8 }}>↻ {refreshedAt}</span>}
           </div>
         </div>
@@ -193,53 +200,101 @@ export default function ProductivityOverallScreen() {
         </div>
       ) : (
         <>
-          {/* Filtro de período: Dia | Semana | Mês consolidado */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <span style={{ fontSize: 11, color: T.t4, textTransform: "uppercase", letterSpacing: 1, marginRight: 4 }}>Período</span>
-            {[["day", "Dia (D-1)"], ["week", "Semana"], ["month", "Mês consolidado"]].map(([k, lab]) => (
-              <button key={k} onClick={() => setPeriodView(k)} style={{
-                background: periodView === k ? "rgba(59,130,246,0.18)" : T.bgControl,
-                border: `1px solid ${periodView === k ? "#3b82f6aa" : T.border}`,
-                borderRadius: 9, padding: "6px 16px",
-                color: periodView === k ? "#3b82f6" : T.t4,
-                fontSize: 13, fontWeight: periodView === k ? 800 : 500, cursor: "pointer",
-              }}>{lab}</button>
-            ))}
-          </div>
+          {monthMode ? (
+            /* Mês consolidado — hero único */
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "18px 24px", boxShadow: `${T.cardShadow}, 0 0 40px ${c_month}0d`, position: "relative", overflow: "hidden", flexShrink: 0 }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${c_month}cc, transparent)` }} />
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+                <span style={{ fontSize: 12, color: T.t4, textTransform: "uppercase", letterSpacing: 1.2 }}>Atingimento — Mês consolidado · {monthLabel}{monthDays ? ` · ${monthDays} dias c/ dados` : ""}</span>
+                <span style={{ fontSize: 46, fontWeight: 900, color: c_month, lineHeight: 1, textShadow: T.isDark ? `0 0 28px ${c_month}66` : "none", fontVariantNumeric: "tabular-nums" }}>
+                  {monthProg != null ? `${(monthProg * 100).toFixed(1)}%` : "—"}
+                </span>
+              </div>
+              <ProgressBar value={monthProg} color="auto" height={34} />
+              <div style={{ display: "flex", gap: 30, marginTop: 12 }}>
+                <div><div style={{ fontSize: 24, fontWeight: 800, color: T.t1, fontVariantNumeric: "tabular-nums" }}>{Math.round(monthC).toLocaleString()}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>casos entregues</div></div>
+                <div><div style={{ fontSize: 24, fontWeight: 800, color: T.t3, fontVariantNumeric: "tabular-nums" }}>{Math.round(monthQ).toLocaleString()}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>cota alocada</div></div>
+                <div><div style={{ fontSize: 24, fontWeight: 800, color: monthDelta >= 0 ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>{monthDelta >= 0 ? `+${monthDelta}` : monthDelta}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>Δ acima da cota</div></div>
+                <div style={{ marginLeft: "auto" }}><div style={{ fontSize: 24, fontWeight: 800, color: T.blue }}>{mSum?.activeCount || 0}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>designers</div></div>
+              </div>
+            </div>
+          ) : (
+          /* Row 1: Hero D-1 | Hero Semanal */
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flexShrink: 0 }}>
 
-          {/* Hero do período selecionado */}
-          {(() => {
-            const v = periodView;
-            const prog = v === "month" ? monthProg : v === "week" ? weeklyProg : overallProg;
-            const cC = v === "month" ? monthC : v === "week" ? weeklyC : totalC;
-            const cQ = v === "month" ? monthQ : v === "week" ? weeklyQ : totalQ;
-            const dlt = v === "month" ? monthDelta : v === "week" ? weeklyDelta : totalDelta;
-            const col = progColor(prog);
-            const desn = v === "month" ? (mSum?.activeCount || 0) : totalDesigners;
-            const sub = v === "month"
-              ? `MÊS CONSOLIDADO — ${monthLabel}${monthDays ? ` · ${monthDays} dias c/ dados` : ""}`
-              : v === "week"
-                ? `ATINGIMENTO SEMANAL${weekLabel ? ` — ${weekLabel}` : ""} · ${weeklyDates.length} dia${weeklyDates.length !== 1 ? "s" : ""}`
-                : `ATINGIMENTO GERAL — D-1${latestDate ? ` · ${fmtDateFull(latestDate)}` : ""}`;
-            return (
-              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "18px 24px", boxShadow: `${T.cardShadow}, 0 0 40px ${col}0d`, position: "relative", overflow: "hidden", flexShrink: 0 }}>
-                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${col}cc, transparent)` }} />
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-                  <span style={{ fontSize: 12, color: T.t4, textTransform: "uppercase", letterSpacing: 1.2 }}>{sub}</span>
-                  <span style={{ fontSize: 46, fontWeight: 900, color: col, lineHeight: 1, textShadow: T.isDark ? `0 0 28px ${col}66` : "none", fontVariantNumeric: "tabular-nums" }}>
-                    {prog != null ? `${(prog * 100).toFixed(1)}%` : "—"}
-                  </span>
+            {/* D-1 */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 22px", boxShadow: `${T.cardShadow}, 0 0 40px ${c_overall}0d`, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${c_overall}cc, transparent)` }} />
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+                <span style={{ fontSize: 11, color: T.t4, textTransform: "uppercase", letterSpacing: 1.2 }}>Atingimento Geral — D-1</span>
+                <span style={{ fontSize: 40, fontWeight: 900, color: c_overall, lineHeight: 1, textShadow: T.isDark ? `0 0 28px ${c_overall}66` : "none", fontVariantNumeric: "tabular-nums" }}>
+                  {overallProg != null ? `${(overallProg * 100).toFixed(1)}%` : "—"}
+                </span>
+              </div>
+              <ProgressBar value={overallProg} color="auto" height={32} />
+              <div style={{ display: "flex", gap: 24, marginTop: 10 }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.t1, fontVariantNumeric: "tabular-nums" }}>{Math.round(totalC).toLocaleString()}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>casos entregues</div>
                 </div>
-                <ProgressBar value={prog} color="auto" height={34} />
-                <div style={{ display: "flex", gap: 30, marginTop: 12 }}>
-                  <div><div style={{ fontSize: 24, fontWeight: 800, color: T.t1, fontVariantNumeric: "tabular-nums" }}>{Math.round(cC).toLocaleString()}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>casos entregues</div></div>
-                  <div><div style={{ fontSize: 24, fontWeight: 800, color: T.t3, fontVariantNumeric: "tabular-nums" }}>{Math.round(cQ).toLocaleString()}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>cota alocada</div></div>
-                  <div><div style={{ fontSize: 24, fontWeight: 800, color: dlt >= 0 ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>{dlt >= 0 ? `+${dlt}` : dlt}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>Δ acima da cota</div></div>
-                  <div style={{ marginLeft: "auto" }}><div style={{ fontSize: 24, fontWeight: 800, color: T.blue }}>{desn}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>designers</div></div>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.t3, fontVariantNumeric: "tabular-nums" }}>{Math.round(totalQ).toLocaleString()}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>cota alocada</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: totalDelta >= 0 ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>
+                    {totalDelta >= 0 ? `+${totalDelta}` : totalDelta}
+                  </div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>Δ acima da cota</div>
+                </div>
+                <div style={{ marginLeft: "auto" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.blue }}>{totalDesigners}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>designers</div>
                 </div>
               </div>
-            );
-          })()}
+            </div>
+
+            {/* Semanal */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 22px", boxShadow: `${T.cardShadow}, 0 0 40px ${c_weekly}0d`, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${c_weekly}cc, transparent)` }} />
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: T.t4, textTransform: "uppercase", letterSpacing: 1.2 }}>Atingimento Semanal</span>
+                  <span style={{ fontSize: 11, color: T.t5, marginLeft: 6 }}>
+                    {weekLabel && `${weekLabel} · `}{weeklyDates.length} dia{weeklyDates.length !== 1 ? "s" : ""} c/ dados
+                    {weeklyDates.length === 1 && weeklyDates[0] === (selDate || latestDate) && (
+                      <span style={{ color: "#f59e0b", marginLeft: 6, fontWeight: 600 }}>= D-1</span>
+                    )}
+                  </span>
+                </div>
+                <span style={{ fontSize: 40, fontWeight: 900, color: c_weekly, lineHeight: 1, textShadow: T.isDark ? `0 0 28px ${c_weekly}66` : "none", fontVariantNumeric: "tabular-nums" }}>
+                  {weeklyProg != null ? `${(weeklyProg * 100).toFixed(1)}%` : "—"}
+                </span>
+              </div>
+              <ProgressBar value={weeklyProg} color="auto" height={32} />
+              <div style={{ display: "flex", gap: 24, marginTop: 10 }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.t1, fontVariantNumeric: "tabular-nums" }}>{Math.round(weeklyC).toLocaleString()}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>casos entregues</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.t3, fontVariantNumeric: "tabular-nums" }}>{Math.round(weeklyQ).toLocaleString()}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>cota alocada</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: weeklyDelta >= 0 ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>
+                    {weeklyDelta >= 0 ? `+${weeklyDelta}` : weeklyDelta}
+                  </div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>Δ acima da cota</div>
+                </div>
+                <div style={{ marginLeft: "auto" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.purple }}>{weeklyDates.length}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>dias úteis</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          )}
 
           {/* Row 2 (flex:1): [tabela + avg tasks] | quota vs entregue */}
           <div style={{ display: "grid", gridTemplateColumns: "0.68fr 1.32fr", gap: 10, flex: 1, minHeight: 0 }}>

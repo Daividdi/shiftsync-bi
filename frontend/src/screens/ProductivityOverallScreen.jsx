@@ -45,6 +45,7 @@ export default function ProductivityOverallScreen() {
   const [refreshedAt, setRefreshedAt] = useState("");
   const [availDates, setAvailDates]   = useState([]);
   const [selDate, setSelDate]         = useState(null);
+  const [monthSummary, setMonthSummary] = useState(null);
 
   useEffect(() => {
     api.get("/metrics/productivity/available-dates").then(({ data }) => {
@@ -57,14 +58,17 @@ export default function ProductivityOverallScreen() {
     try {
       const dateQ = selDate ? `?date=${selDate}` : "";
       const dateA = selDate ? `&date=${selDate}` : "";
-      const [gd, tr, td1] = await Promise.all([
+      const monthQ = selDate ? `?month=${selDate.slice(0, 7)}` : "";
+      const [gd, tr, td1, ms] = await Promise.all([
         api.get(`/metrics/productivity/groups${dateQ}`),
         api.get("/metrics/productivity/groups/trend?days=12"),
         api.get(`/metrics/productivity/top-by-group?n=3${dateA}`),
+        api.get(`/metrics/productivity/month-summary${monthQ}`),
       ]);
       setGroups((gd.data.groups || []).filter(g => g.group?.startsWith(ATD_PREFIX)));
       setGroupsTrend((tr.data || []).filter(g => g.group?.startsWith(ATD_PREFIX)));
       setTop3((td1.data.groups || []).filter(g => g.group?.startsWith(ATD_PREFIX)));
+      setMonthSummary(ms.data || null);
       setLatestDate(gd.data.date || "");
       setRefreshedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
     } catch (e) { console.error(e); }
@@ -127,6 +131,21 @@ export default function ProductivityOverallScreen() {
       })()
     : "";
 
+  // Mensal — agregado do mês inteiro (todos os dias com dados)
+  const mSum       = monthSummary?.summary || null;
+  const monthProg  = mSum?.progress ?? null;
+  const monthC     = mSum?.totalCompleted || 0;
+  const monthQ     = mSum?.totalQuota || 0;
+  const monthDelta = Math.round(monthC - monthQ);
+  const monthDays  = monthSummary?.days || 0;
+  const c_month    = progColor(monthProg);
+  const monthLabel = (() => {
+    const m = monthSummary?.month || (selDate || latestDate || "").slice(0, 7);
+    if (!m) return "";
+    const [y, mo] = m.split("-");
+    return new Date(+y, +mo - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "");
+  })();
+
   // Quota vs Entregue por grupo (barras)
   const quotaVsData = groups.map(g => ({
     name:     SHORT2(g.group),
@@ -173,8 +192,8 @@ export default function ProductivityOverallScreen() {
         </div>
       ) : (
         <>
-          {/* Row 1: Hero D-1 | Hero Semanal */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flexShrink: 0 }}>
+          {/* Row 1: Hero D-1 | Hero Semanal | Hero Mensal */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, flexShrink: 0 }}>
 
             {/* D-1 */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 22px", boxShadow: `${T.cardShadow}, 0 0 40px ${c_overall}0d`, position: "relative", overflow: "hidden" }}>
@@ -244,6 +263,43 @@ export default function ProductivityOverallScreen() {
                 <div style={{ marginLeft: "auto" }}>
                   <div style={{ fontSize: 22, fontWeight: 800, color: T.purple }}>{weeklyDates.length}</div>
                   <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>dias úteis</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mensal */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 22px", boxShadow: `${T.cardShadow}, 0 0 40px ${c_month}0d`, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${c_month}cc, transparent)` }} />
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: T.t4, textTransform: "uppercase", letterSpacing: 1.2 }}>Atingimento Mensal</span>
+                  <span style={{ fontSize: 11, color: T.t5, marginLeft: 6 }}>
+                    {monthLabel}{monthDays ? ` · ${monthDays} dias c/ dados` : ""}
+                  </span>
+                </div>
+                <span style={{ fontSize: 40, fontWeight: 900, color: c_month, lineHeight: 1, textShadow: T.isDark ? `0 0 28px ${c_month}66` : "none", fontVariantNumeric: "tabular-nums" }}>
+                  {monthProg != null ? `${(monthProg * 100).toFixed(1)}%` : "—"}
+                </span>
+              </div>
+              <ProgressBar value={monthProg} color="auto" height={32} />
+              <div style={{ display: "flex", gap: 24, marginTop: 10 }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.t1, fontVariantNumeric: "tabular-nums" }}>{Math.round(monthC).toLocaleString()}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>casos entregues</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.t3, fontVariantNumeric: "tabular-nums" }}>{Math.round(monthQ).toLocaleString()}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>cota alocada</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: monthDelta >= 0 ? T.green : T.red, fontVariantNumeric: "tabular-nums" }}>
+                    {monthDelta >= 0 ? `+${monthDelta}` : monthDelta}
+                  </div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>Δ acima da cota</div>
+                </div>
+                <div style={{ marginLeft: "auto" }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: T.blue }}>{mSum?.activeCount || 0}</div>
+                  <div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>designers</div>
                 </div>
               </div>
             </div>

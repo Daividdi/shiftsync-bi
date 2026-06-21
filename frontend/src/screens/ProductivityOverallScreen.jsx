@@ -41,6 +41,7 @@ export default function ProductivityOverallScreen() {
   const [groups, setGroups]           = useState([]);
   const [groupsTrend, setGroupsTrend] = useState([]);
   const [top3, setTop3]               = useState([]);
+  const [top3Month, setTop3Month]     = useState([]);
   const [latestDate, setLatestDate]   = useState("");
   const [refreshedAt, setRefreshedAt] = useState("");
   const [availDates, setAvailDates]   = useState([]);
@@ -60,15 +61,17 @@ export default function ProductivityOverallScreen() {
       const dateQ = selDate ? `?date=${selDate}` : "";
       const dateA = selDate ? `&date=${selDate}` : "";
       const monthQ = selDate ? `?month=${selDate.slice(0, 7)}` : "";
-      const [gd, tr, td1, ms] = await Promise.all([
+      const [gd, tr, td1, ms, tdm] = await Promise.all([
         api.get(`/metrics/productivity/groups${dateQ}`),
         api.get("/metrics/productivity/groups/trend?days=12"),
         api.get(`/metrics/productivity/top-by-group?n=3${dateA}`),
         api.get(`/metrics/productivity/month-summary${monthQ}`),
+        api.get(`/metrics/productivity/top-by-group/month?n=3${monthQ ? "&" + monthQ.slice(1) : ""}`),
       ]);
       setGroups((gd.data.groups || []).filter(g => g.group?.startsWith(ATD_PREFIX)));
       setGroupsTrend((tr.data || []).filter(g => g.group?.startsWith(ATD_PREFIX)));
       setTop3((td1.data.groups || []).filter(g => g.group?.startsWith(ATD_PREFIX)));
+      setTop3Month((tdm.data.groups || []).filter(g => g.group?.startsWith(ATD_PREFIX)));
       setMonthSummary(ms.data || null);
       setLatestDate(gd.data.date || "");
       setRefreshedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
@@ -93,7 +96,13 @@ export default function ProductivityOverallScreen() {
   const totalDelta  = Math.round(totalC - totalQ);
   const c_overall   = progColor(overallProg);
 
-  const validGroups = groups.filter(g => g.activeCount > 0);
+  // Quando "Mês consolidado" está ligado, os blocos por grupo (tabela, cota×entregue,
+  // top, designers) passam a usar o agregado mensal por grupo do month-summary.
+  const activeGroups = (monthMode && monthSummary?.groups?.length)
+    ? monthSummary.groups.map(g => ({ ...g, totalUncompleted: Math.max(0, (g.totalQuota || 0) - (g.totalCompleted || 0)) }))
+    : groups;
+
+  const validGroups = activeGroups.filter(g => g.activeCount > 0);
   const totalDesigners = validGroups.reduce((s, g) => s + g.activeCount, 0);
 
   const avgQuotaRef = validGroups.length > 0
@@ -148,7 +157,7 @@ export default function ProductivityOverallScreen() {
   })();
 
   // Quota vs Entregue por grupo (barras)
-  const quotaVsData = groups.map(g => ({
+  const quotaVsData = activeGroups.map(g => ({
     name:     SHORT2(g.group),
     group:    g.group,
     quota:    Math.round(g.totalQuota),
@@ -166,8 +175,9 @@ export default function ProductivityOverallScreen() {
     return row;
   });
 
-  const nCols = gridCols(Math.max(top3.length, 1));
-  const topGroupId = [...groups].sort((a, b) => (b.progress || 0) - (a.progress || 0))[0]?.group;
+  const activeTop3 = (monthMode && top3Month.length) ? top3Month : top3;
+  const nCols = gridCols(Math.max(activeTop3.length, 1));
+  const topGroupId = [...activeGroups].sort((a, b) => (b.progress || 0) - (a.progress || 0))[0]?.group;
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", padding: "14px 28px", gap: 10, overflow: "hidden" }}>
@@ -310,7 +320,7 @@ export default function ProductivityOverallScreen() {
                 ))}
               </div>
 
-              {groups.map(g => {
+              {activeGroups.map(g => {
                 const gc = GROUP_COLORS[g.group] || T.t3;
                 const delta = Math.round(g.totalCompleted - g.totalQuota);
                 const isTop = g.group === topGroupId;
@@ -329,10 +339,18 @@ export default function ProductivityOverallScreen() {
               <div style={{ display: "grid", gridTemplateColumns: "10px 1fr 44px 44px 38px 34px", gap: "0 8px", alignItems: "center", padding: "6px 0", borderTop: `1px solid ${T.border}`, marginTop: 3 }}>
                 <div />
                 <span style={{ fontSize: 10, fontWeight: 800, color: T.t4, textTransform: "uppercase" }}>Total</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: T.t2, textAlign: "right" }}>{Math.round(totalQ)}</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: T.t1, textAlign: "right" }}>{Math.round(totalC)}</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: totalDelta >= 0 ? T.green : T.red, textAlign: "right" }}>{totalDelta >= 0 ? `+${totalDelta}` : totalDelta}</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: c_overall, textAlign: "right" }}>{overallProg != null ? `${(overallProg * 100).toFixed(0)}%` : "—"}</span>
+                {(() => {
+                  const tQ = monthMode && mSum ? monthQ : totalQ;
+                  const tC = monthMode && mSum ? monthC : totalC;
+                  const tD = monthMode && mSum ? monthDelta : totalDelta;
+                  const tP = monthMode && mSum ? monthProg : overallProg;
+                  return <>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: T.t2, textAlign: "right" }}>{Math.round(tQ)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: T.t1, textAlign: "right" }}>{Math.round(tC)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: tD >= 0 ? T.green : T.red, textAlign: "right" }}>{tD >= 0 ? `+${tD}` : tD}</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: progColor(tP), textAlign: "right" }}>{tP != null ? `${(tP * 100).toFixed(0)}%` : "—"}</span>
+                  </>;
+                })()}
               </div>
             </div>
 
@@ -457,7 +475,7 @@ export default function ProductivityOverallScreen() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${nCols}, 1fr)`, gridAutoRows: "minmax(110px, 130px)", gap: 8 }}>
-              {top3.map(g => {
+              {activeTop3.map(g => {
                 const gc = GROUP_COLORS[g.group] || T.t3;
                 return (
                   <div key={g.group} style={{

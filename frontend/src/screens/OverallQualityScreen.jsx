@@ -4,6 +4,17 @@ import PeriodSelector from "../components/PeriodSelector";
 import { T, scoreColor, ATD_PREFIX, gridCols, GROUP_COLORS } from "../theme";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ReferenceLine } from "recharts";
 
+const GlossBar = ({ x, y, width, height, payload }) => {
+  if (!width || width <= 0) return null;
+  const fill = (payload && payload.color) || "#64748b";
+  return (
+    <g>
+      <rect x={x} y={y} width={width} height={height} rx={8} ry={8} fill={fill} />
+      <rect x={x} y={y} width={width} height={height} rx={8} ry={8} fill="url(#qGloss)" />
+    </g>
+  );
+};
+
 function fmtWeek(d) {
   if (!d) return "";
   const [year, m, day] = d.split("-");
@@ -124,16 +135,21 @@ export default function OverallQualityScreen() {
               </div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 64, left: 4, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="qGloss" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ffffff" stopOpacity="0.38" />
+                      <stop offset="45%" stopColor="#ffffff" stopOpacity="0.06" />
+                      <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="4 4" stroke={T.bgControl} horizontal={false} />
                   <XAxis type="number" domain={[7, 10]} tick={{ fill: T.t4, fontSize: 14 }} axisLine={false} tickLine={false} tickCount={7} />
                   <YAxis type="category" dataKey="name" tick={{ fill: T.t2, fontSize: 14, fontWeight: 700 }} axisLine={false} tickLine={false} width={96} />
                   <Tooltip content={<TT />} cursor={{ rx: 8, ry: 8, fill: T.border }} />
                   <ReferenceLine x={8.5} stroke="#f59e0b" strokeDasharray="6 4" strokeWidth={2}
                     label={{ value: "Meta 8.5", fill: "#f59e0b", fontSize: 13, position: "top" }} />
-                  <Bar dataKey="score" radius={[0, 8, 8, 0]} background={{ fill: T.border, radius: [0, 8, 8, 0] }}
-                    label={{ position: "right", fontSize: 16, fontWeight: 800, fill: T.t1, formatter: v => v.toFixed(2) }}>
-                    {chartData.map((d, i) => <Cell key={i} fill={d.color} fillOpacity={0.85} />)}
-                  </Bar>
+                  <Bar dataKey="score" radius={[0, 8, 8, 0]} shape={<GlossBar />} background={{ fill: T.border, radius: [0, 8, 8, 0] }}
+                    label={{ position: "right", fontSize: 16, fontWeight: 800, fill: T.t1, formatter: v => v.toFixed(2) }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

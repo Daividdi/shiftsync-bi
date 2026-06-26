@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
+import LiveProductionScreen from "./screens/LiveProductionScreen";
 import ProductivityScreen from "./screens/ProductivityScreen";
 import ProductivityOverallScreen from "./screens/ProductivityOverallScreen";
 import QualityScreen from "./screens/QualityScreen";
@@ -13,6 +14,7 @@ function readTheme() {
 }
 
 const SCREENS = [
+  { id: "live",       label: "Produção ao vivo",     component: LiveProductionScreen,      accent: "#f59e0b" },
   { id: "prod-geral", label: "Produtividade Geral", component: ProductivityOverallScreen, accent: T.cyan   },
   { id: "atd-prod",   label: "Produtividade ATD",   component: ProductivityScreen,        accent: T.blue   },
   { id: "atd-qual",   label: "Qualidade ATD",        component: QualityScreen,             accent: "#3b82f6" },

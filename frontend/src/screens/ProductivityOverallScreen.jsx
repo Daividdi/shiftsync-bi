@@ -220,7 +220,7 @@ export default function ProductivityOverallScreen() {
                   {monthProg != null ? `${(monthProg * 100).toFixed(1)}%` : "—"}
                 </span>
               </div>
-              <ProgressBar value={monthProg} color="auto" height={34} />
+              <ProgressBar value={monthProg} color="auto" height={34} hideValue />
               <div style={{ display: "flex", gap: 30, marginTop: 12 }}>
                 <div><div style={{ fontSize: 24, fontWeight: 800, color: T.t1, fontVariantNumeric: "tabular-nums" }}>{Math.round(monthC).toLocaleString()}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>casos entregues</div></div>
                 <div><div style={{ fontSize: 24, fontWeight: 800, color: T.t3, fontVariantNumeric: "tabular-nums" }}>{Math.round(monthQ).toLocaleString()}</div><div style={{ fontSize: 10, color: T.t5, textTransform: "uppercase", letterSpacing: 0.8 }}>cota alocada</div></div>
@@ -241,7 +241,7 @@ export default function ProductivityOverallScreen() {
                   {overallProg != null ? `${(overallProg * 100).toFixed(1)}%` : "—"}
                 </span>
               </div>
-              <ProgressBar value={overallProg} color="auto" height={32} />
+              <ProgressBar value={overallProg} color="auto" height={32} hideValue />
               <div style={{ display: "flex", gap: 24, marginTop: 10 }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: T.t1, fontVariantNumeric: "tabular-nums" }}>{Math.round(totalC).toLocaleString()}</div>
@@ -281,7 +281,7 @@ export default function ProductivityOverallScreen() {
                   {weeklyProg != null ? `${(weeklyProg * 100).toFixed(1)}%` : "—"}
                 </span>
               </div>
-              <ProgressBar value={weeklyProg} color="auto" height={32} />
+              <ProgressBar value={weeklyProg} color="auto" height={32} hideValue />
               <div style={{ display: "flex", gap: 24, marginTop: 10 }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: T.t1, fontVariantNumeric: "tabular-nums" }}>{Math.round(weeklyC).toLocaleString()}</div>

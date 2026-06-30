@@ -36,6 +36,19 @@ const GEO_ALIAS = {
   "Brasil":                   "Brazil",
 };
 
+// The auto-feed stores ISO-2 country codes (Doris country_iso_two_letter_code),
+// while Excel uploads used full English names. Normalize both to the canonical
+// names used by CENTROIDS / PT_BR / the GeoJSON match.
+const ISO2 = {
+  US: "United States", BR: "Brazil", MX: "Mexico", CA: "Canada",
+  AR: "Argentina", CO: "Colombia", CL: "Chile", PE: "Peru", VE: "Venezuela",
+  PR: "Puerto Rico", DO: "Dominican Republic", CU: "Cuba",
+  ES: "Spain", PT: "Portugal", JP: "Japan", CN: "China", IN: "India",
+  AU: "Australia", ZA: "South Africa", GB: "United Kingdom",
+  DE: "Germany", FR: "France",
+};
+function canonCountry(c) { return ISO2[c] || GEO_ALIAS[c] || c; }
+
 const PT_BR = {
   "United States":      "EUA",
   "Brazil":             "Brasil",
@@ -64,7 +77,14 @@ export default memo(function WorldMap({ geo = [], groups = [], height = "100%" }
 
   const PALETTE = [T.cyan, T.blue, T.purple, T.green, T.orange, T.teal];
 
-  const sorted = [...geo].sort((a, b) => b.case_count - a.case_count);
+  // Normalize country (ISO-2 or full name) to canonical, merging any duplicates.
+  const merged = {};
+  for (const d of geo) {
+    const country = canonCountry(d.country);
+    if (!merged[country]) merged[country] = { ...d, country, case_count: 0 };
+    merged[country].case_count += d.case_count || 0;
+  }
+  const sorted = Object.values(merged).sort((a, b) => b.case_count - a.case_count);
   const maxCount = sorted[0]?.case_count || 1;
 
   const byName = {};

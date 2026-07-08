@@ -109,19 +109,32 @@ export default function ProductivityOverallScreen() {
     ? Math.round(validGroups.reduce((s, g) => s + g.totalQuota / g.activeCount, 0) / validGroups.length)
     : null;
 
-  // Semanal — uploads da semana calendário de selDate (segunda → selDate)
+  // Semanal — semana calendário de selDate (segunda → selDate). No início da
+  // semana (menos de 3 dias com dados) mostra a semana ANTERIOR completa
+  // seg–sáb, senão o painel abre quase vazio toda segunda/terça.
   const allDates = [...new Set(groupsTrend.flatMap(g => g.trend.map(t => t.date)))].sort();
-  const weeklyDates = (() => {
-    const ref = selDate || latestDate;
-    if (!ref) return allDates.slice(-5);
-    const dt = new Date(ref + "T12:00:00");
+  const _refDate = selDate || latestDate;
+  const _weekStart = (() => {
+    if (!_refDate) return null;
+    const dt = new Date(_refDate + "T12:00:00");
     const dow = dt.getDay();
     const diff = dow === 0 ? -6 : 1 - dow;
     const mon = new Date(dt); mon.setDate(dt.getDate() + diff);
-    const weekStart = mon.toISOString().slice(0, 10);
-    const filtered = allDates.filter(d => d >= weekStart && d <= ref);
+    return mon.toISOString().slice(0, 10);
+  })();
+  const weeklyDates = (() => {
+    if (!_refDate || !_weekStart) return allDates.slice(-5);
+    const filtered = allDates.filter(d => d >= _weekStart && d <= _refDate);
+    if (filtered.length < 3) {
+      const mon = new Date(_weekStart + "T12:00:00");
+      mon.setDate(mon.getDate() - 7);
+      const prevStart = mon.toISOString().slice(0, 10);
+      const prevWeek = allDates.filter(d => d >= prevStart && d < _weekStart);
+      if (prevWeek.length > filtered.length) return prevWeek;
+    }
     return filtered.length > 0 ? filtered : allDates.slice(-1); // fallback to at least 1 day
   })();
+  const weeklyIsPrev = _weekStart && weeklyDates.length > 0 && weeklyDates[0] < _weekStart;
   let weeklyQ = 0, weeklyC = 0;
   groupsTrend.forEach(g => {
     g.trend.filter(t => weeklyDates.includes(t.date)).forEach(t => {
@@ -274,6 +287,9 @@ export default function ProductivityOverallScreen() {
                     {weekLabel && `${weekLabel} · `}{weeklyDates.length} dia{weeklyDates.length !== 1 ? "s" : ""} c/ dados
                     {weeklyDates.length === 1 && weeklyDates[0] === (selDate || latestDate) && (
                       <span style={{ color: "#f59e0b", marginLeft: 6, fontWeight: 600 }}>= D-1</span>
+                    )}
+                    {weeklyIsPrev && (
+                      <span style={{ color: "#f59e0b", marginLeft: 6, fontWeight: 600 }}>semana anterior — a atual assume com 3+ dias</span>
                     )}
                   </span>
                 </div>

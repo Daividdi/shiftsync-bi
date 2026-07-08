@@ -64,12 +64,29 @@ const upload  = multer({
   },
 });
 
+// Autodetecção: tenta qualidade (abas BR Case Design), depois produtividade.
+function detectFileType(buffer) {
+  try {
+    const q = parseQualityFile(buffer);
+    if (q && (q.subType !== "combined" || q.weeklyGroups.length || q.weeklyDesigners.length || q.monthlyDesigners.length)) return "quality";
+  } catch (e) {}
+  try {
+    const p = parseProductivityFile(buffer);
+    if (p && p.length) return "productivity";
+  } catch (e) {}
+  return null;
+}
+
 // ─── Preview (parse only, no DB writes) ──────────────────────────────────────
 router.post("/preview", upload.single("file"), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
-    const fileType     = req.body.type || "productivity";
+    let fileType       = req.body.type || "productivity";
     const snapshotDate = req.body.date || new Date().toISOString().slice(0, 10);
+    if (fileType === "auto") {
+      fileType = detectFileType(req.file.buffer);
+      if (!fileType) return res.status(422).json({ error: "Formato não reconhecido — envie Capacity_Design (produtividade) ou BR Case Design (qualidade)." });
+    }
 
     if (fileType === "productivity") {
       const dateResults = parseProductivityFile(req.file.buffer);
@@ -134,11 +151,16 @@ router.post("/", upload.single("file"), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
 
-    const fileType     = req.body.type || "productivity";
+    let fileType       = req.body.type || "productivity";
     const snapshotDate = req.body.date || new Date().toISOString().slice(0, 10);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotDate))
       return res.status(400).json({ error: "Invalid date format (YYYY-MM-DD)" });
+
+    if (fileType === "auto") {
+      fileType = detectFileType(req.file.buffer);
+      if (!fileType) return res.status(422).json({ error: "Formato não reconhecido — envie Capacity_Design (produtividade) ou BR Case Design (qualidade)." });
+    }
 
     if (fileType === "productivity") return handleProductivity(req, res);
     if (fileType === "quality")      return handleQuality(req, res, snapshotDate);

@@ -60,33 +60,47 @@ function StatusBanner({ status }) {
   );
 }
 
-function DropZone({ file, setFile, inputRef }) {
+function DropZone({ files, setFiles, inputRef }) {
   const [drag, setDrag] = useState(false);
+  const addFiles = (list) => {
+    const fs = [...list].filter(f => /\.xlsx?$/i.test(f.name));
+    if (fs.length) setFiles(prev => [...prev, ...fs.filter(f => !prev.some(p => p.name === f.name && p.size === f.size))]);
+  };
   return (
     <div
-      onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
+      onDrop={e => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer.files); }}
       onDragOver={e => { e.preventDefault(); setDrag(true); }}
       onDragLeave={() => setDrag(false)}
       onClick={() => inputRef.current?.click()}
       style={{
-        border: `2px dashed ${drag ? "#6366F1" : file ? "#3b82f6" : "#334155"}`,
-        borderRadius: 12, padding: "32px 24px", textAlign: "center", cursor: "pointer",
-        background: drag ? "rgba(99,102,241,0.06)" : file ? "rgba(59,130,246,0.06)" : "transparent",
-        transition: "all 0.2s",
+        border: `2px dashed ${drag ? "#6366F1" : files.length ? "#3b82f6" : "#334155"}`,
+        borderRadius: 12, padding: "26px 24px", textAlign: "center", cursor: "pointer",
+        background: drag ? "rgba(99,102,241,0.06)" : files.length ? "rgba(59,130,246,0.06)" : "transparent",
+        transition: "border-color 0.2s, background 0.2s",
       }}
     >
-      <input ref={inputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }}
-        onChange={e => setFile(e.target.files[0])} />
-      <Upload size={28} color={file ? "#3b82f6" : "#475569"} style={{ margin: "0 auto 10px" }} />
-      {file ? (
+      <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple style={{ display: "none" }}
+        onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
+      <Upload size={28} color={files.length ? "#3b82f6" : "#475569"} style={{ margin: "0 auto 10px" }} />
+      {files.length ? (
         <>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#3b82f6" }}>{file.name}</div>
-          <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>{(file.size / 1024).toFixed(0)} KB</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#3b82f6" }}>{files.length} arquivo{files.length > 1 ? "s" : ""} na fila</div>
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4, maxHeight: 130, overflowY: "auto" }}>
+            {files.map((f, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", fontSize: 12, color: "#94a3b8" }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 420 }}>{f.name}</span>
+                <span style={{ color: "#475569" }}>{(f.size / 1024).toFixed(0)} KB</span>
+                <span onClick={e => { e.stopPropagation(); setFiles(prev => prev.filter((_, k) => k !== i)); }}
+                  style={{ color: "#ef4444", cursor: "pointer", fontWeight: 800, padding: "0 4px" }}>×</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "#475569", marginTop: 8 }}>o tipo de cada arquivo é detectado automaticamente</div>
         </>
       ) : (
         <>
-          <div style={{ fontSize: 13, color: "#94a3b8" }}>Clique ou arraste o arquivo .xlsx aqui</div>
-          <div style={{ fontSize: 11, color: "#475569", marginTop: 3 }}>Máximo 25 MB</div>
+          <div style={{ fontSize: 13, color: "#94a3b8" }}>Clique ou arraste um ou mais arquivos .xlsx aqui</div>
+          <div style={{ fontSize: 11, color: "#475569", marginTop: 3 }}>Tipo detectado automaticamente · máximo 25 MB cada</div>
         </>
       )}
     </div>
@@ -303,14 +317,10 @@ function HistorySection({ title, color, items, onDelete }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function UploadPage({ onBack }) {
-  const [file,       setFile]       = useState(null);
-  const [type,       setType]       = useState("productivity");
-  const [date,       setDate]       = useState(new Date().toISOString().slice(0, 10));
+  const [files,      setFiles]      = useState([]);
   const [force,      setForce]      = useState(false);
-  const [previewing, setPreviewing] = useState(false);
-  const [preview,    setPreview]    = useState(null);
-  const [confirming, setConfirming] = useState(false);
-  const [status,     setStatus]     = useState(null);
+  const [importing,  setImporting]  = useState(false);
+  const [results,    setResults]    = useState([]);
   const [history,    setHistory]    = useState([]);
   const inputRef = useRef();
 
@@ -319,45 +329,36 @@ export default function UploadPage({ onBack }) {
   }
   useEffect(() => { loadHistory(); }, []);
 
-  async function handlePreview() {
-    if (!file) return;
-    setPreviewing(true); setPreview(null); setStatus(null);
-    const fd = new FormData();
-    fd.append("file", file); fd.append("type", type); fd.append("date", date);
-    try {
-      const r = await api.post("/upload/preview", fd);
-      setPreview(r.data);
-    } catch (e) {
-      setStatus({ ok: false, msg: e.response?.data?.error || e.message });
-      setPreviewing(false);
+  async function handleImportAll() {
+    if (!files.length || importing) return;
+    setImporting(true); setResults([]);
+    const out = [];
+    for (const f of files) {
+      const fd = new FormData();
+      fd.append("file", f); fd.append("type", "auto");
+      fd.append("date", new Date().toISOString().slice(0, 10));
+      if (force) fd.append("force", "true");
+      try {
+        const r = await api.post("/upload", fd);
+        const d = r.data;
+        let kind, msg;
+        if (d.dates != null) {
+          kind = "Produtividade";
+          msg = `${d.dates} dia(s) — ${d.imported} novo(s), ${d.replaced} substituído(s)`;
+        } else if (d.weeks != null) {
+          kind = "Qualidade";
+          msg = d.force
+            ? `${d.weeks} semana(s) reimportada(s)${d.months ? ` · ${d.months} mês(es)` : ""}`
+            : `${d.weeks} semana(s) nova(s)${d.weeksSkipped ? ` · ${d.weeksSkipped} já existiam` : ""}${d.months ? ` · ${d.months} mês(es)` : ""}`;
+        } else { kind = "Importado"; msg = `${d.rows || 0} registros`; }
+        out.push({ name: f.name, ok: true, kind, msg });
+      } catch (e) {
+        out.push({ name: f.name, ok: false, kind: "Erro", msg: e.response?.data?.error || e.message });
+      }
+      setResults([...out]);
     }
-  }
-
-  async function handleConfirm() {
-    if (!file) return;
-    setConfirming(true);
-    const fd = new FormData();
-    fd.append("file", file); fd.append("type", type); fd.append("date", date);
-    if (force) fd.append("force", "true");
-    try {
-      const r = await api.post("/upload", fd);
-      const d = r.data;
-      let msg;
-      if (d.dates != null)        msg = `${d.dates} dia(s) de produtividade importados (${d.imported} novos, ${d.replaced} substituídos)`;
-      else if (d.weeks != null)   msg = d.force
-        ? `${d.weeks} semana(s) reimportada(s)${d.months ? ` · ${d.months} mês(es)` : ""}`
-        : `${d.weeks} semana(s) nova(s)${d.weeksSkipped ? ` · ${d.weeksSkipped} ignoradas` : ""}${d.months ? ` · ${d.months} mês(es)` : ""}`;
-      else msg = `${d.rows} registros importados`;
-      setStatus({ ok: true, msg });
-      setFile(null); setPreview(null); setPreviewing(false);
-      loadHistory();
-    } catch (e) {
-      setStatus({ ok: false, msg: e.response?.data?.error || e.message });
-    } finally { setConfirming(false); }
-  }
-
-  function handleCancel() {
-    setPreview(null); setPreviewing(false);
+    setFiles([]); setImporting(false);
+    loadHistory();
   }
 
   async function handleDelete(date, fileType) {
@@ -400,73 +401,78 @@ export default function UploadPage({ onBack }) {
           <div style={{ fontSize: 20, fontWeight: 800, color: "#e2e8f0" }}>Upload de Dados</div>
         </div>
 
+        {/* O que carregar */}
+        <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 16, padding: "16px 20px", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Fontes de dados — tudo automático (upload = backup)</div>
+          {[["Produtividade (Capacity_Design)", "automática — feed diário 06:00; upload só como backup", true],
+            ["QC interno (inspeções)", "automático — feed diário 06:10; sem arquivo", true],
+            ["Qualidade (BR Case Design)", "automática — feed diário 06:20; upload só como backup", true]].map(([t, d, auto], i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 12.5 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: auto ? "#22c55e" : "#f59e0b", flexShrink: 0 }} />
+              <b style={{ color: "#e2e8f0" }}>{t}</b>
+              <span style={{ color: "#94a3b8" }}>· {d}</span>
+              {auto && <span style={{ fontSize: 9.5, fontWeight: 700, color: "#22d3ee", border: "1px solid #22d3ee55", borderRadius: 5, padding: "0.5px 6px" }}>auto</span>}
+            </div>
+          ))}
+        </div>
+
         {/* Upload card */}
         <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 16, padding: 24, marginBottom: 24 }}>
-          {/* Type + date row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
-            <div>
-              <label style={{ fontSize: 11, color: "#94a3b8", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Tipo de arquivo</label>
-              <select value={type} onChange={e => { setType(e.target.value); setPreview(null); setPreviewing(false); }} style={{
-                width: "100%", background: "#0f172a", border: "1px solid #334155",
-                borderRadius: 8, padding: "9px 12px", color: "#e2e8f0", fontSize: 13,
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: 1 }}>Importar arquivos</div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+              <div onClick={() => setForce(f => !f)} style={{
+                width: 36, height: 20, borderRadius: 10,
+                background: force ? "#f59e0b" : "#334155",
+                position: "relative", transition: "background 0.2s", flexShrink: 0,
               }}>
-                <option value="productivity">Produtividade (Capacity_Design)</option>
-                <option value="quality">Qualidade (BR Case Design)</option>
-              </select>
-            </div>
-            {type !== "productivity" && (
-              <div style={{ display: "flex", alignItems: "flex-end" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
-                  <div onClick={() => setForce(f => !f)} style={{
-                    width: 36, height: 20, borderRadius: 10,
-                    background: force ? "#f59e0b" : "#334155",
-                    position: "relative", transition: "background 0.2s", flexShrink: 0,
-                  }}>
-                    <div style={{
-                      position: "absolute", top: 2, left: force ? 18 : 2, width: 16, height: 16,
-                      borderRadius: "50%", background: "#fff", transition: "left 0.2s",
-                    }} />
-                  </div>
-                  <span style={{ fontSize: 12, color: force ? "#f59e0b" : "#64748b" }}>Forçar reimportação</span>
-                </label>
-              </div>
-            )}
-            {type === "productivity" && (
-              <div>
-                <label style={{ fontSize: 11, color: "#94a3b8", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>Data de referência</label>
-                <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{
-                  width: "100%", background: "#0f172a", border: "1px solid #334155",
-                  borderRadius: 8, padding: "9px 12px", color: "#e2e8f0", fontSize: 13,
+                <div style={{
+                  position: "absolute", top: 2, left: force ? 18 : 2, width: 16, height: 16,
+                  borderRadius: "50%", background: "#fff", transition: "left 0.2s",
                 }} />
               </div>
-            )}
+              <span style={{ fontSize: 12, color: force ? "#f59e0b" : "#64748b" }}>Forçar reimportação</span>
+            </label>
           </div>
 
-          {/* Drop zone */}
-          {!preview && <DropZone file={file} setFile={f => { setFile(f); setPreview(null); setPreviewing(false); setStatus(null); }} inputRef={inputRef} />}
+          <DropZone files={files} setFiles={setFiles} inputRef={inputRef} />
 
-          {/* Preview result */}
-          {preview && <PreviewPanel preview={preview} type={type} force={force} onConfirm={handleConfirm} onCancel={handleCancel} confirming={confirming} />}
+          <button onClick={handleImportAll} disabled={!files.length || importing} style={{
+            marginTop: 14, width: "100%",
+            background: !files.length ? "#1e293b" : "#6366F1",
+            border: "none", borderRadius: 10, padding: "11px 0",
+            color: !files.length ? "#475569" : "#fff",
+            fontWeight: 700, fontSize: 14, cursor: !files.length ? "default" : "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            transition: "background 0.2s",
+          }}>
+            {importing
+              ? <><RefreshCw size={14} style={{ animation: "spin 0.6s linear infinite" }} /> Importando {results.length + 1}/{files.length}...</>
+              : <><Upload size={14} /> Importar {files.length ? `${files.length} arquivo${files.length > 1 ? "s" : ""}` : "arquivos"}</>
+            }
+          </button>
 
-          {/* Action button */}
-          {!preview && (
-            <button onClick={handlePreview} disabled={!file || previewing} style={{
-              marginTop: 14, width: "100%",
-              background: !file ? "#1e293b" : "#6366F1",
-              border: "none", borderRadius: 10, padding: "11px 0",
-              color: !file ? "#475569" : "#fff",
-              fontWeight: 700, fontSize: 14, cursor: !file ? "default" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              transition: "background 0.2s",
-            }}>
-              {previewing
-                ? <><RefreshCw size={14} style={{ animation: "spin 0.6s linear infinite" }} /> Analisando arquivo...</>
-                : <><Eye size={14} /> Verificar arquivo</>
-              }
-            </button>
+          {results.length > 0 && (
+            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+              {results.map((r, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px",
+                  background: r.ok ? "rgba(34,197,94,0.07)" : "rgba(239,68,68,0.07)",
+                  border: `1px solid ${r.ok ? "#22c55e44" : "#ef444455"}`, borderRadius: 10, fontSize: 12.5,
+                }}>
+                  {r.ok ? <CheckCircle size={15} color="#22c55e" style={{ flexShrink: 0, marginTop: 1 }} />
+                        : <XCircle size={15} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ color: "#e2e8f0", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.name}
+                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: r.ok ? "#22d3ee" : "#ef4444", border: `1px solid ${r.ok ? "#22d3ee55" : "#ef444455"}`, borderRadius: 5, padding: "1px 6px", verticalAlign: "1px" }}>{r.kind}</span>
+                    </div>
+                    <div style={{ color: "#94a3b8", marginTop: 2 }}>{r.msg}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
-
-          <StatusBanner status={status} />
         </div>
 
         {/* History */}

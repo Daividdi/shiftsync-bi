@@ -103,12 +103,12 @@ function ScoreTrendCard({ title, value, delta, trendData, color, id }) {
         {value != null && (
           <div style={{
             fontSize: 10, fontWeight: 700,
-            color: value >= 8 ? T.green : T.red,
-            background: value >= 8 ? T.green + "18" : T.red + "18",
-            border: `1px solid ${value >= 8 ? T.green + "30" : T.red + "30"}`,
+            color: value >= 8.3 ? T.green : T.red,
+            background: value >= 8.3 ? T.green + "18" : T.red + "18",
+            border: `1px solid ${value >= 8.3 ? T.green + "30" : T.red + "30"}`,
             borderRadius: 6, padding: "2px 8px", letterSpacing: 0.5,
           }}>
-            {value >= 8 ? "✓ acima da meta" : "✗ abaixo da meta"}
+            {value >= 8.3 ? "✓ acima da meta" : "✗ abaixo da meta"}
           </div>
         )}
       </div>
@@ -169,9 +169,9 @@ function ScoreTrendCard({ title, value, delta, trendData, color, id }) {
               );
             }} />
 
-            <ReferenceLine y={8.0}
+            <ReferenceLine y={8.3}
               stroke="#f59e0b" strokeDasharray="8 5" strokeWidth={2.5} strokeOpacity={0.9}
-              label={{ value: "META 8.0", position: "insideTopRight", fill: "#f59e0b", fontSize: 11, fontWeight: 800, dy: -4 }}
+              label={{ value: "META 8.3", position: "insideTopRight", fill: "#f59e0b", fontSize: 11, fontWeight: 800, dy: -4 }}
             />
             <Area type="monotone" dataKey="_s" stroke="none" fill={`url(#${gshadow})`} fillOpacity={1}
               dot={false} activeDot={false} isAnimationActive animationDuration={900} animationEasing="ease-out" />
@@ -398,7 +398,7 @@ export default function QualityScreen() {
                   Evolução Score — Semanas
                 </div>
                 <div style={{ flex: 1, minHeight: 0 }}>
-                  <AreaTrend data={weekTrend} dataKey="score" color="#3b82f6" target={8.0} id="qscore" height="100%" showLabels />
+                  <AreaTrend data={weekTrend} dataKey="score" color="#3b82f6" target={8.3} id="qscore" height="100%" showLabels />
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, borderTop: `1px solid ${T.border}`, paddingTop: 10, marginTop: 10 }}>

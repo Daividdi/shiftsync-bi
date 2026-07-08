@@ -33,7 +33,7 @@ function StatusBadge({ value, thresholds = [0.8, 0.6] }) {
 }
 
 function ScoreStatusBadge({ value }) {
-  const label = value >= 9 ? "Excelente" : value >= 8.5 ? "Bom" : value >= 8 ? "Regular" : "Atenção";
+  const label = value >= 9 ? "Excelente" : value >= 8.5 ? "Bom" : value >= 8.3 ? "Regular" : "Atenção";
   const c = scoreColor(value);
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: c + "18", border: `1px solid ${c}44`, borderRadius: 20, padding: "5px 14px", width: "fit-content" }}>
@@ -257,10 +257,10 @@ export default function OverviewScreen() {
   });
 
   const prodBehind  = mergedGroups.filter(g => g.progress != null && g.progress < 0.6);
-  const qualAtRisk  = mergedGroups.filter(g => g.avg_score != null && g.avg_score < 8.0);
+  const qualAtRisk  = mergedGroups.filter(g => g.avg_score != null && g.avg_score < 8.3);
   const statusIssues = [
     ...(prodBehind.length  ? [`${prodBehind.length} grupo${prodBehind.length > 1 ? "s" : ""} prod < 60%`] : []),
-    ...(qualAtRisk.length  ? [`${qualAtRisk.length} grupo${qualAtRisk.length > 1 ? "s" : ""} qualidade < 8.0`] : []),
+    ...(qualAtRisk.length  ? [`${qualAtRisk.length} grupo${qualAtRisk.length > 1 ? "s" : ""} qualidade < 8.3`] : []),
     ...(weekQ?.rate_low_score > 0.1 ? [`score ≤6: ${(weekQ.rate_low_score * 100).toFixed(1)}%`] : []),
     ...(weekQ?.rate_unfit > 0.08   ? [`unfit: ${(weekQ.rate_unfit * 100).toFixed(1)}%`] : []),
   ];

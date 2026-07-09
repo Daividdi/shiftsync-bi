@@ -10,6 +10,7 @@ app.use("/api/metrics", require("./routes/metrics"));
 app.use("/api/quality", require("./routes/quality"));
 app.use("/api/admin", require("./routes/admin").router);
 app.use("/api/live", require("./routes/live"));
+app.use("/api/exec", require("./routes/exec"));
 
 app.get("/api/health", (_, res) => res.json({ ok: true }));
 

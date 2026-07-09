@@ -7,6 +7,7 @@ import QualityScreen from "./screens/QualityScreen";
 import OverallQualityScreen from "./screens/OverallQualityScreen";
 import UploadPage from "./screens/UploadPage";
 import QuotaAdminScreen from "./screens/QuotaAdminScreen";
+import ExecutiveScreen from "./screens/ExecutiveScreen";
 import { T, applyTheme } from "./theme";
 
 function readTheme() {
@@ -35,6 +36,7 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [showNav, setShowNav] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [execRole, setExecRole] = useState(null); // só chega via postMessage do ShiftSync principal
   let navTimer = null;
 
   useEffect(() => {
@@ -72,8 +74,11 @@ export default function App() {
       // ShiftSync sends this to navigate to management pages
       if (e.data?.type === "BI_GOTO_PAGE") {
         const p = e.data.page;
-        if (p === "upload" || p === "admin" || p === "dashboard") setPage(p);
+        if (p === "upload" || p === "admin" || p === "exec" || p === "dashboard") setPage(p);
       }
+      // Ponte de acesso do Painel Executivo — só o ShiftSync principal (já
+      // autenticado) manda a role; sem essa mensagem, a tela fica bloqueada.
+      if (e.data?.type === "AUTH_ROLE") setExecRole(e.data.role || null);
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
@@ -116,6 +121,10 @@ export default function App() {
 
   if (page === "admin") {
     return <div key={isDark ? "dark" : "light"} style={{ background: T.bg, minHeight: "100vh" }}><QuotaAdminScreen onBack={() => { setPage("dashboard"); window.location.hash = ""; try { window.parent.postMessage({ type: "BI_PAGE_BACK" }, "*"); } catch {} }} /></div>;
+  }
+
+  if (page === "exec") {
+    return <div key={isDark ? "dark" : "light"} style={{ background: T.bg, minHeight: "100vh" }}><ExecutiveScreen execRole={execRole} onBack={() => { setPage("dashboard"); window.location.hash = ""; try { window.parent.postMessage({ type: "BI_PAGE_BACK" }, "*"); } catch {} }} /></div>;
   }
 
   const Screen = SCREENS[screenIdx].component;

@@ -41,8 +41,8 @@ function RankRow({ rank, name, group, progress, completed, quota }) {
           <div style={{ fontSize: 9, color: T.t4 }}>{shortGroup}</div>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 3, flexShrink: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: c, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{(pct * 100).toFixed(0)}%{over ? "↑" : ""}</div>
-          <div style={{ fontSize: 9, color: T.t5 }}>{Math.round(completed)}/{Math.round(quota)}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: c, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{Math.round(completed)}</div>
+          <div style={{ fontSize: 9, color: T.t5 }}>casos · {(pct * 100).toFixed(0)}%{over ? "↑" : ""}</div>
         </div>
       </div>
       <div style={{ background: T.bgControl, borderRadius: 3, overflow: "hidden", height: 3, marginLeft: 28 }}>

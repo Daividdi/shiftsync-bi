@@ -127,7 +127,10 @@ router.get("/productivity/top", (req, res) => {
       return quota > 0 ? { ...r, quota, progress: r.completed / quota } : null;
     })
     .filter(Boolean)
-    .sort((a, b) => b.progress - a.progress || b.completed - a.completed)
+    // Ranking por volume total de casos concluídos — não por % da meta
+    // (senão alguém com quota baixa e poucos casos furava na frente de quem
+    // entregou muito mais em termos absolutos).
+    .sort((a, b) => b.completed - a.completed)
     .slice(0, n);
 
   res.json({ date, rankings });
@@ -563,7 +566,7 @@ router.get("/productivity/month-top", (req, res) => {
   const rankings = Object.values(designerMap)
     .filter(d => d.quota > 0)
     .map(d => ({ ...d, progress: d.completed / d.quota }))
-    .sort((a, b) => b.progress - a.progress)
+    .sort((a, b) => b.completed - a.completed)
     .slice(0, n);
   res.json({ month, rankings });
 });

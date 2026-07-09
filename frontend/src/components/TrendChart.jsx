@@ -232,8 +232,49 @@ export function DesignerBars({ designers = [], height = 220 }) {
   );
 }
 
+// Tooltip do scatter — nome, nota e nº de avaliações (a dimensão que o
+// gráfico de barras antigo escondia)
+function ScatterTT({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 14px", fontSize: 13, boxShadow: T.cardShadow }}>
+      <div style={{ color: T.t1, fontWeight: 700, marginBottom: 3 }}>{d.fullName}</div>
+      <div style={{ color: T.t4 }}>{d.qty} avaliações · nota {d.score.toFixed(2)}</div>
+    </div>
+  );
+}
+
+// Nota × volume real: um ponto por designer. Revela quem sustenta nota alta
+// com bastante volume vs quem tem nota alta mas amostra pequena (menos
+// confiável) — a relação que "Score vs Volume" prometia mas nunca mostrava.
 export function DesignerScatter({ designers = [], height = 220 }) {
-  return <DesignerBars designers={designers} height={height} />;
+  const data = designers
+    .filter(d => d.score_qty > 0)
+    .map(d => ({
+      qty: d.score_qty, score: +(d.avg_score || 0).toFixed(2),
+      fullName: d.designer_name, name: shortName(d.designer_name),
+      group: d.group_no, position: d.position,
+    }));
+  if (!data.length) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height, color: T.t5, fontSize: 13 }}>Sem dados</div>;
+  const maxQty = Math.max(...data.map(d => d.qty), 1);
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="4 4" stroke={T.border} />
+        <XAxis type="number" dataKey="qty" name="avaliações" domain={[0, Math.ceil(maxQty * 1.1)]} tick={getTickSm()} axisLine={false} tickLine={false} label={{ value: "nº de avaliações", position: "insideBottom", offset: -2, fill: T.t5, fontSize: 11 }} />
+        <YAxis type="number" dataKey="score" name="nota" domain={[6, 10]} tick={getTickSm()} axisLine={false} tickLine={false} width={30} />
+        <ZAxis range={[60, 60]} />
+        <ReferenceLine y={8.3} stroke="#f59e0b" strokeDasharray="5 3" strokeWidth={1.5} />
+        <Tooltip content={<ScatterTT />} cursor={{ strokeDasharray: "3 3" }} />
+        <Scatter data={data}>
+          {data.map((d, i) => (
+            <Cell key={i} fill={scoreBarColor(d.score)} fillOpacity={0.8} />
+          ))}
+        </Scatter>
+      </ScatterChart>
+    </ResponsiveContainer>
+  );
 }
 
 // ─── Horizontal bar: by position ─────────────────────────────────────────────

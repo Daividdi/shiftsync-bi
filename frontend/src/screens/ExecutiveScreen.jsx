@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ShieldCheck, TrendingUp, Star, ClipboardList, Users, ArrowLeft } from "lucide-react";
+import { ShieldCheck, TrendingUp, Star, ClipboardList, Users, ArrowLeft, Briefcase } from "lucide-react";
 import api from "../api";
 import { T } from "../theme";
 
@@ -20,10 +20,23 @@ function CenterCard({ center, T }) {
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 10 }}>
-            <span style={{ fontSize: 42, fontWeight: 900, color: c, lineHeight: 1 }}>{fmt(center.pct)}</span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.t5 }}>% da meta</span>
+            {center.pctPending ? (
+              <>
+                <span style={{ fontSize: 24, fontWeight: 800, color: T.t6 }}>Em validação</span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 42, fontWeight: 900, color: c, lineHeight: 1 }}>{fmt(center.pct)}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: T.t5 }}>% da meta</span>
+              </>
+            )}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 18 }}>
+          {center.pctPending && <div style={{ fontSize: 10.5, color: T.t7, marginTop: 3 }}>% de atingimento ainda em conferência — volume, qualidade e QC abaixo já validados.</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginTop: 18 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: T.t5, textTransform: "uppercase", letterSpacing: 0.6 }}><Briefcase size={12} /> Casos</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: T.t1, marginTop: 3 }}>{center.caseVolume != null ? fmt(center.caseVolume) : "—"}</div>
+            </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: T.t5, textTransform: "uppercase", letterSpacing: 0.6 }}><Star size={12} /> Qualidade</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: T.t1, marginTop: 3 }}>{fmt(center.qualityScore, 2)}</div>

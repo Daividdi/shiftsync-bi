@@ -30,20 +30,25 @@ router.get("/summary", (req, res) => {
       label: "Brasil", monthKey,
       headcount: prod ? prod.n : 0,
       pct: prod && prod.q > 0 ? round(prod.c / prod.q * 100) : null,
+      caseVolume: prod && prod.c != null ? Math.round(prod.c) : null,
       qualityScore: qual && qual.s != null ? round(qual.s, 2) : null,
       qcRate: qc && qc.insp ? round(qc.passed / qc.insp * 100, 1) : null,
       updatedAt: new Date().toISOString(),
     };
 
-    // MY: lido de um cache alimentado por um sync externo (ainda não
-    // conectado — pendente decisão sobre a credencial cross-servidor).
+    // MY: lido de um cache alimentado pelo sync diário (my-exec-sync.py,
+    // login real no Metabase da Malásia — não toca no app workforce-my).
+    // pct fica de fora por ora: a soma de user_quota_all_date_mys não bateu
+    // com o padrão esperado (possível descompasso de fuso completed×quota),
+    // sem uma referência oficial pra calibrar. Volume/qualidade/QC validados.
     let my = { label: "Malásia", connected: false };
     try {
       const row = db.prepare("SELECT * FROM exec_summary_cache WHERE center='MY' ORDER BY id DESC LIMIT 1").get();
       if (row) {
         my = {
           label: "Malásia", connected: true,
-          headcount: row.headcount, pct: row.pct, qualityScore: row.quality_score, qcRate: row.qc_rate,
+          headcount: row.headcount, pct: row.pct, pctPending: row.pct == null,
+          caseVolume: row.case_volume, qualityScore: row.quality_score, qcRate: row.qc_rate,
           updatedAt: row.updated_at,
         };
       }
@@ -63,15 +68,16 @@ router.get("/summary", (req, res) => {
 router.post("/ingest", (req, res) => {
   const SECRET = process.env.EXEC_SYNC_SECRET;
   if (!SECRET || req.headers["x-internal-secret"] !== SECRET) return res.status(401).json({ error: "Unauthorized" });
-  const { center, headcount, pct, qualityScore, qcRate } = req.body || {};
+  const { center, headcount, pct, caseVolume, qualityScore, qcRate } = req.body || {};
   if (!center) return res.status(400).json({ error: "center é obrigatório" });
   db.exec(`CREATE TABLE IF NOT EXISTS exec_summary_cache (
     id INTEGER PRIMARY KEY AUTOINCREMENT, center TEXT NOT NULL,
-    headcount INTEGER, pct REAL, quality_score REAL, qc_rate REAL,
+    headcount INTEGER, pct REAL, case_volume INTEGER, quality_score REAL, qc_rate REAL,
     updated_at TEXT DEFAULT (datetime('now'))
   )`);
-  db.prepare("INSERT INTO exec_summary_cache (center, headcount, pct, quality_score, qc_rate) VALUES (?,?,?,?,?)")
-    .run(center, headcount ?? null, pct ?? null, qualityScore ?? null, qcRate ?? null);
+  try { db.exec("ALTER TABLE exec_summary_cache ADD COLUMN case_volume INTEGER"); } catch (e) {}
+  db.prepare("INSERT INTO exec_summary_cache (center, headcount, pct, case_volume, quality_score, qc_rate) VALUES (?,?,?,?,?,?)")
+    .run(center, headcount ?? null, pct ?? null, caseVolume ?? null, qualityScore ?? null, qcRate ?? null);
   res.json({ ok: true });
 });
 

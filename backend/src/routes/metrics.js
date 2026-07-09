@@ -202,9 +202,11 @@ router.get("/productivity/top-by-group", (req, res) => {
       completed: r.completed, quota, progress: r.completed / quota,
     });
   }
+  // Top 3 por grupo: volume total de casos concluídos, não % da meta
+  // (mesma regra do TOP D-1 geral).
   const result = Object.keys(byGroup).sort().map(g => ({
     group: g,
-    top: byGroup[g].sort((a, b) => b.progress - a.progress || b.completed - a.completed).slice(0, n),
+    top: byGroup[g].sort((a, b) => b.completed - a.completed).slice(0, n),
   })).filter(g => g.top.length > 0);
 
   res.json({ date, groups: result });
@@ -263,7 +265,7 @@ router.get("/productivity/top-by-group/month", (req, res) => {
   }
   const groups = Object.keys(byGroup).sort().map(g => ({
     group: g,
-    top: byGroup[g].sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0) || b.completed - a.completed).slice(0, n),
+    top: byGroup[g].sort((a, b) => b.completed - a.completed).slice(0, n),
   }));
   res.json({ month, groups });
 });

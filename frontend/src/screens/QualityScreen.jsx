@@ -4,7 +4,7 @@ import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Refe
 import api from "../api";
 import KPICard from "../components/KPICard";
 import PeriodSelector from "../components/PeriodSelector";
-import { AreaTrend, BarTrend, HorizBar, DesignerScatter } from "../components/TrendChart";
+import { AreaTrend, BarTrend, DesignerScatter } from "../components/TrendChart";
 import { T, scoreColor } from "../theme";
 
 function fmtWeek(d) {
@@ -272,19 +272,6 @@ export default function QualityScreen() {
   const monthDelta = monthTrend.length >= 2
     ? +(monthTrend.at(-1).score - monthTrend.at(-2).score).toFixed(2) : null;
 
-  const EXCLUDE_POSITIONS = new Set([
-    "Group Leader", "TOTAL", "ATP-1", "Lean Operations",
-    "Brazilian Medical Center", "Design Doctor", "Tech-Wuxi", "Intern-14",
-  ]);
-  const positionData = (week?.by_position || [])
-    .filter(r => !EXCLUDE_POSITIONS.has(r.position_name) && r.avg_score
-      && !r.position_name.startsWith("BR-"))
-    .sort((a, b) => b.avg_score - a.avg_score)
-    .map(r => ({
-      name: r.position_name.replace("Tech-", "T-").replace("Intern-", "I-"),
-      score: +r.avg_score.toFixed(2),
-    }));
-
   const panelStyle = {
     background: T.card, border: `1px solid ${T.border}`, boxShadow: T.cardShadow,
     borderRadius: 16, padding: "16px 22px",
@@ -417,14 +404,8 @@ export default function QualityScreen() {
               <div style={{ fontSize: 13, color: T.t4, textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>
                 Score vs Volume
               </div>
-              <DesignerScatter designers={designers} height={200} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
-                <div style={{ fontSize: 13, color: "#8aaabf", textTransform: "uppercase", letterSpacing: 1, flexShrink: 0 }}>
-                  Score por Nível
-                </div>
-                <div style={{ flex: 1, minHeight: 0 }}>
-                  <HorizBar data={positionData} dataKey="score" domain={[7, 10]} height="100%" />
-                </div>
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <DesignerScatter designers={designers} height="100%" />
               </div>
             </div>
 

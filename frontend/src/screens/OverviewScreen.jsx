@@ -154,7 +154,7 @@ function GroupCard({ group, progress, totalCompleted, totalQuota, totalUncomplet
   const name = group.replace("BR-ATD-", "");
 
   const prodDelta = progress != null ? ((progress - 0.8) * 100).toFixed(1) : null;
-  const qualDelta = avg_score != null ? (avg_score - 8.5).toFixed(2) : null;
+  const qualDelta = avg_score != null ? (avg_score - 8.3).toFixed(2) : null;
 
   return (
     <div style={{
@@ -192,11 +192,11 @@ function GroupCard({ group, progress, totalCompleted, totalQuota, totalUncomplet
           value={avg_score != null ? avg_score.toFixed(2) : null}
           valueLabel="/10"
           barFill={avg_score != null ? avg_score / 10 : 0}
-          barTarget={0.85}
+          barTarget={0.83}
           line1={`${total_scored || 0} avaliados`}
           line2={rate_low_score != null ? `${(rate_low_score * 100).toFixed(1)}% score ≤6` : null}
           deltaLabel={qualDelta}
-          deltaPositive={avg_score >= 8.5}
+          deltaPositive={avg_score >= 8.3}
         />
       </div>
     </div>

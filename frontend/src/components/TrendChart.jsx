@@ -220,7 +220,7 @@ export function DesignerBars({ designers = [], height = 220 }) {
         <XAxis type="number" domain={[7, 10]} tick={getTickSm()} axisLine={false} tickLine={false} tickCount={7} />
         <YAxis type="category" dataKey="name" tick={{ fill: T.t2, fontSize: 12, fontWeight: 600 }} axisLine={false} tickLine={false} width={88} />
         <Tooltip content={<DesignerBarTT />} />
-        <ReferenceLine x={8.5} stroke="#f59e0b" strokeDasharray="5 3" strokeWidth={1.5} />
+        <ReferenceLine x={8.3} stroke="#f59e0b" strokeDasharray="5 3" strokeWidth={1.5} />
         <Bar dataKey="score" radius={[0, 5, 5, 0]} background={{ fill: T.border, radius: [0, 5, 5, 0] }}
           label={{ position: "right", fontSize: 13, fontWeight: 700, fill: T.t1, formatter: v => v.toFixed(2) }}>
           {data.map((d, i) => (
